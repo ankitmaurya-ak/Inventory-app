@@ -1,12 +1,17 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
-import { Settings, Mail, KeyRound, Save } from 'lucide-react';
+import { Settings, Mail, KeyRound, Save, Clock, Globe } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsPage() {
     const { user } = useAuth();
-    const [form, setForm] = useState({ email_user: '', email_pass: '' });
+    const [form, setForm] = useState({
+        email_user: '',
+        email_pass: '',
+        low_stock_email_time: '09:00',
+        low_stock_email_timezone: 'Asia/Kolkata',
+    });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState({ text: '', isError: false });
@@ -20,6 +25,8 @@ export default function SettingsPage() {
             setForm({
                 email_user: res.data.email_user || '',
                 email_pass: res.data.email_pass || '',
+                low_stock_email_time: res.data.low_stock_email_time || '09:00',
+                low_stock_email_timezone: res.data.low_stock_email_timezone || 'Asia/Kolkata',
             });
             setLoading(false);
         }).catch(() => setLoading(false));
@@ -82,6 +89,45 @@ export default function SettingsPage() {
                                     value={form.email_user}
                                     onChange={e => setForm({ ...form, email_user: e.target.value })}
                                 />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Daily Supplier Email Time
+                                </label>
+                                <div className="relative">
+                                    <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="time"
+                                        className="input pl-10"
+                                        value={form.low_stock_email_time}
+                                        onChange={e => setForm({ ...form, low_stock_email_time: e.target.value })}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1.5">
+                                    Low-stock supplier emails will only be sent at this time if items are still below threshold.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Email Time Zone
+                                </label>
+                                <div className="relative">
+                                    <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        className="input pl-10"
+                                        value={form.low_stock_email_timezone}
+                                        onChange={e => setForm({ ...form, low_stock_email_timezone: e.target.value })}
+                                    >
+                                        <option value="Asia/Kolkata">Asia/Kolkata</option>
+                                        <option value="UTC">UTC</option>
+                                        <option value="America/New_York">America/New_York</option>
+                                        <option value="Europe/London">Europe/London</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
