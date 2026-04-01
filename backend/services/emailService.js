@@ -1,42 +1,42 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const { query } = require('../config/database');
+
+const getEmailConfig = async () => {
+  const dbSettings = await query('SELECT key, value FROM settings WHERE key IN ($1, $2)', ['email_user', 'email_pass']);
+  const settings = {};
+  dbSettings.rows.forEach(r => { settings[r.key] = r.value; });
+
+  return {
+    fromEmail: settings.email_user || process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    smtpPassword: settings.email_pass || process.env.EMAIL_PASS,
+    resendApiKey: process.env.RESEND_API_KEY,
+  };
+};
 
 /**
  * Send a low-stock supplier email.
  */
 const sendLowStockEmail = async (item) => {
   if (!item.supplier_email) {
-    console.log(`[Email] Skipped – no supplier email for item: ${item.name}`);
-    return;
+    console.log(`[Email] Skipped - no supplier email for item: ${item.name}`);
+    return false;
   }
 
-  // Fetch config from DB
-  const dbSettings = await query('SELECT key, value FROM settings WHERE key IN ($1, $2)', ['email_user', 'email_pass']);
-  const settings = {};
-  dbSettings.rows.forEach(r => { settings[r.key] = r.value; });
+  const { fromEmail, smtpPassword, resendApiKey } = await getEmailConfig();
 
-  const user = settings.email_user || process.env.EMAIL_USER;
-  const pass = settings.email_pass || process.env.EMAIL_PASS;
-
-  if (!user || !pass) {
-    console.log(`[Email] Skipped – no email credentials configured in Database or .env`);
-    return;
+  if (!fromEmail) {
+    console.log('[Email] Skipped - no sender email configured.');
+    return false;
   }
-
-  const dynamicTransporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: false,
-    auth: { user, pass },
-  });
 
   const mailOptions = {
-    from: `"Inventory System" <${user}>`,
+    from: `Inventory System <${fromEmail}>`,
     to: item.supplier_email,
-    subject: `Low Stock Request – ${item.name}`,
+    subject: `Low Stock Request - ${item.name}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        <h2 style="color: #e53e3e;">⚠️ Low Stock Alert</h2>
+        <h2 style="color: #e53e3e;">Low Stock Alert</h2>
         <p>Dear ${item.supplier_name || 'Supplier'},</p>
         <p>Our inventory system has detected <strong>critically low stock</strong> for the following item:</p>
         <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
@@ -71,11 +71,30 @@ const sendLowStockEmail = async (item) => {
   };
 
   try {
+    if (resendApiKey) {
+      const resend = new Resend(resendApiKey);
+      await resend.emails.send(mailOptions);
+      console.log(`[Email] Sent via Resend to ${item.supplier_email} for item: ${item.name}`);
+      return true;
+    }
+
+    if (!smtpPassword) {
+      console.log('[Email] Skipped - no Resend API key or SMTP password configured.');
+      return false;
+    }
+
+    const dynamicTransporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: false,
+      auth: { user: fromEmail, pass: smtpPassword },
+    });
+
     await dynamicTransporter.sendMail(mailOptions);
-    console.log(`[Email] ✅ Sent low-stock alert to ${item.supplier_email} for item: ${item.name}`);
+    console.log(`[Email] Sent low-stock alert to ${item.supplier_email} for item: ${item.name}`);
     return true;
   } catch (err) {
-    console.error(`[Email] ❌ Failed to send email: ${err.message}`);
+    console.error(`[Email] Failed to send email: ${err.message}`);
     return false;
   }
 };
