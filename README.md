@@ -60,7 +60,7 @@ docker-compose down
 This repository now includes a root `render.yaml` blueprint for Render with:
 
 - a backend web service for the API and Socket.IO
-- a separate worker service for BullMQ jobs
+- background workers running inside the backend service for free-tier testing
 - a managed PostgreSQL database
 - a managed Redis-compatible Key Value instance
 - a frontend web service for Next.js
@@ -78,4 +78,10 @@ cd backend
 npm run migrate
 ```
 
-The backend web service no longer starts workers in production. Render should run the dedicated `inventorapp-worker` service for scheduled checks and queue processing.
+This free-tier Render setup runs BullMQ workers inside the backend web service to avoid creating a paid worker instance.
+
+Limitations of this free setup:
+
+- it is suitable for testing and demos, not production
+- free web services spin down after idle time, so background checks may pause
+- SMTP email sending from free Render web services is restricted, so email notifications may not work until you move to a paid plan
