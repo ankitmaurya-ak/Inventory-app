@@ -1,0 +1,152 @@
+databases:
+  - name: inventorapp-db
+    databaseName: inventorydb
+    user: inventoryapp
+
+services:
+  - type: keyvalue
+    name: inventorapp-redis
+    plan: starter
+    ipAllowList: []
+
+  - type: web
+    name: inventorapp-api
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: START_WORKERS
+        value: false
+      - key: DATABASE_SSL
+        value: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventorapp-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: inventorapp-redis
+          type: keyvalue
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: OWNER_PHONE_NUMBER
+        sync: false
+
+  - type: worker
+    name: inventorapp-worker
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm run worker
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: START_WORKERS
+        value: true
+      - key: DATABASE_SSL
+        value: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventorapp-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: inventorapp-redis
+          type: keyvalue
+          property: connectionString
+      - key: JWT_SECRET
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: JWT_SECRET
+      - key: JWT_EXPIRES_IN
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: JWT_EXPIRES_IN
+      - key: FRONTEND_URL
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: FRONTEND_URL
+      - key: EMAIL_HOST
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: EMAIL_HOST
+      - key: EMAIL_PORT
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: EMAIL_PORT
+      - key: EMAIL_USER
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: EMAIL_USER
+      - key: EMAIL_PASS
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: EMAIL_PASS
+      - key: TWILIO_ACCOUNT_SID
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: TWILIO_ACCOUNT_SID
+      - key: TWILIO_AUTH_TOKEN
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: TWILIO_AUTH_TOKEN
+      - key: TWILIO_PHONE_NUMBER
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: TWILIO_PHONE_NUMBER
+      - key: OWNER_PHONE_NUMBER
+        fromService:
+          name: inventorapp-api
+          type: web
+          envVarKey: OWNER_PHONE_NUMBER
+
+  - type: web
+    name: inventorapp-frontend
+    runtime: node
+    plan: starter
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

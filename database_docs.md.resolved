@@ -1,0 +1,219 @@
+# Database Documentation — Inventory Management App
+
+## Overview
+
+The application uses **PostgreSQL** as the primary relational database. All tables are in the `public` schema.
+
+---
+
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    USERS {
+        uuid id PK
+        varchar name
+        varchar email UK
+        varchar password
+        varchar role
+        timestamp created_at
+    }
+
+    SUPPLIERS {
+        uuid id PK
+        varchar name
+        varchar email UK
+        varchar phone
+        text address
+        timestamp created_at
+    }
+
+    ITEMS {
+        uuid id PK
+        varchar name
+        varchar category
+        integer quantity
+        decimal price
+        integer threshold
+        uuid supplier_id FK
+        varchar location
+        varchar status
+        timestamp updated_at
+        timestamp created_at
+    }
+
+    INVENTORY_LOGS {
+        uuid id PK
+        uuid item_id FK
+        uuid user_id FK
+        varchar action
+        jsonb metadata
+        timestamp timestamp
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK
+        text message
+        varchar type
+        boolean is_read
+        timestamp timestamp
+    }
+
+    USERS ||--o{ INVENTORY_LOGS : "creates"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    SUPPLIERS ||--o{ ITEMS : "supplies"
+    ITEMS ||--o{ INVENTORY_LOGS : "has"
+```
+
+---
+
+## Table Definitions
+
+### 1. `users`
+
+Stores all application users.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique user ID |
+| `name` | VARCHAR(100) | NOT NULL | Full name |
+| `email` | VARCHAR(150) | UNIQUE, NOT NULL | Login email |
+| `password` | VARCHAR(255) | NOT NULL | Bcrypt hashed password |
+| `role` | VARCHAR(20) | DEFAULT 'viewer' | `admin`, `manager`, or `viewer` |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Account creation time |
+
+**Roles:**
+- `admin` — Full access (CRUD everything, manage users)
+- `manager` — Can add/edit/delete items and suppliers
+- `viewer` — Read-only access
+
+---
+
+### 2. `suppliers`
+
+Supplier contact information and metadata.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique supplier ID |
+| `name` | VARCHAR(100) | NOT NULL | Supplier company name |
+| `email` | VARCHAR(150) | UNIQUE, NOT NULL | For automatic low-stock emails |
+| `phone` | VARCHAR(20) | — | Contact phone number |
+| `address` | TEXT | — | Full mailing address |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | When supplier was added |
+
+---
+
+### 3. `items`
+
+The core inventory table.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique item ID |
+| `name` | VARCHAR(150) | NOT NULL | Item name/label |
+| `category` | VARCHAR(100) | — | e.g., "Electronics", "Office" |
+| `quantity` | INTEGER | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Units currently in stock |
+| `price` | DECIMAL(10,2) | NOT NULL, DEFAULT 0 | Unit price |
+| `threshold` | INTEGER | NOT NULL, DEFAULT 10 | Minimum stock level |
+| `supplier_id` | UUID | FK → suppliers(id), ON DELETE SET NULL | Associated supplier |
+| `location` | VARCHAR(100) | — | Physical storage location |
+| `status` | VARCHAR(20) | DEFAULT 'available' | `available`, `out_of_stock`, `needed`, `not_needed` |
+| `updated_at` | TIMESTAMP | DEFAULT NOW() | Last modification time |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | When item was added |
+
+**Status Values:**
+| Status | Description |
+|---|---|
+| `available` | Item is in stock and usable |
+| `out_of_stock` | Quantity = 0 |
+| `needed` | Marked as needed but not yet ordered |
+| `not_needed` | Archived / no longer required |
+
+**Low Stock Rule:** Item is flagged as low stock when `quantity < threshold`. The background worker checks this every 5 minutes.
+
+---
+
+### 4. `inventory_logs`
+
+Audit trail for all inventory changes.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Log entry ID |
+| `item_id` | UUID | FK → items(id), ON DELETE CASCADE | The affected item |
+| `user_id` | UUID | FK → users(id), ON DELETE SET NULL | Who performed the action |
+| `action` | VARCHAR(50) | NOT NULL | Action type (see below) |
+| `metadata` | JSONB | — | Extra context (old/new values, etc.) |
+| `timestamp` | TIMESTAMP | DEFAULT NOW() | When it happened |
+
+**Action Types:**
+| Action | Trigger |
+|---|---|
+| `item_created` | New item added |
+| `item_updated` | Item details changed |
+| `quantity_changed` | Stock level changed |
+| `status_changed` | Item status changed |
+| `supplier_contacted` | Automatic email sent to supplier |
+| `item_deleted` | Item removed |
+
+---
+
+### 5. `notifications`
+
+In-app notification records for users.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Notification ID |
+| `user_id` | UUID | FK → users(id), ON DELETE CASCADE | Target user |
+| `message` | TEXT | NOT NULL | Notification content |
+| `type` | VARCHAR(30) | DEFAULT 'info' | `low_stock`, `info`, `warning`, `error` |
+| `is_read` | BOOLEAN | DEFAULT FALSE | Read status |
+| `timestamp` | TIMESTAMP | DEFAULT NOW() | When it was created |
+
+---
+
+## Indexes
+
+```sql
+-- Users
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+
+-- Items
+CREATE INDEX idx_items_category ON items(category);
+CREATE INDEX idx_items_status ON items(status);
+CREATE INDEX idx_items_supplier ON items(supplier_id);
+CREATE INDEX idx_items_low_stock ON items(quantity, threshold);
+
+-- Logs
+CREATE INDEX idx_logs_item ON inventory_logs(item_id);
+CREATE INDEX idx_logs_user ON inventory_logs(user_id);
+CREATE INDEX idx_logs_timestamp ON inventory_logs(timestamp DESC);
+
+-- Notifications
+CREATE INDEX idx_notif_user ON notifications(user_id);
+CREATE INDEX idx_notif_unread ON notifications(user_id, is_read);
+```
+
+---
+
+## Relationships Summary
+
+| Relationship | Type | Notes |
+|---|---|---|
+| `items` → `suppliers` | Many-to-One | Each item has one supplier |
+| `inventory_logs` → `items` | Many-to-One | Cascades on item delete |
+| `inventory_logs` → `users` | Many-to-One | Sets NULL if user deleted |
+| `notifications` → `users` | Many-to-One | Cascades on user delete |
+
+---
+
+## Migration Files
+
+| File | Purpose |
+|---|---|
+| `database/schema.sql` | Creates all tables, indexes, extensions |
+| `database/seed.sql` | Inserts sample data for testing |
+| `backend/scripts/migrate.js` | Node.js script to run schema.sql |
