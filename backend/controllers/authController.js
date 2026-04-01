@@ -147,7 +147,7 @@ const joinStore = async (req, res) => {
         const hashed = await bcrypt.hash(password, 10);
         const userResult = await client.query(
             `INSERT INTO users (name, email, password, role, store_id)
-             VALUES ($1, $2, $3, 'staff', $4)
+             VALUES ($1, $2, $3, 'viewer', $4)
              RETURNING id, name, email, role, store_id, created_at`,
             [name, email, hashed, store.id]
         );

@@ -22,6 +22,10 @@ const { startWorkers } = require('./workers/index');
 const app = express();
 const httpServer = http.createServer(app);
 
+// Render sits behind a proxy/load balancer. This avoids express-rate-limit
+// misinterpreting forwarded requests in production.
+app.set('trust proxy', 1);
+
 // Socket.io setup
 const io = new Server(httpServer, {
   cors: {
