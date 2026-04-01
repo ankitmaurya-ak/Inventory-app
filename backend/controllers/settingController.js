@@ -1,5 +1,15 @@
 const { query } = require('../config/database');
 
+const saveSetting = async (key, value) => {
+    await query(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key)
+         DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [key, value]
+    );
+};
+
 // GET /api/settings
 const getSettings = async (req, res) => {
     try {
@@ -20,13 +30,19 @@ const getSettings = async (req, res) => {
 
 // PUT /api/settings
 const updateSettings = async (req, res) => {
-    const { email_user, email_pass } = req.body;
+    const { email_user, email_pass, low_stock_email_time, low_stock_email_timezone } = req.body;
     try {
         if (email_user !== undefined) {
-            await query('UPDATE settings SET value = $1 WHERE key = $2', [email_user, 'email_user']);
+            await saveSetting('email_user', email_user);
         }
         if (email_pass && email_pass !== '********') {
-            await query('UPDATE settings SET value = $1 WHERE key = $2', [email_pass, 'email_pass']);
+            await saveSetting('email_pass', email_pass);
+        }
+        if (low_stock_email_time !== undefined) {
+            await saveSetting('low_stock_email_time', low_stock_email_time);
+        }
+        if (low_stock_email_timezone !== undefined) {
+            await saveSetting('low_stock_email_timezone', low_stock_email_timezone);
         }
         res.json({ message: 'Settings updated successfully.' });
     } catch (err) {

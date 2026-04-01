@@ -86,6 +86,23 @@ CREATE INDEX IF NOT EXISTS idx_notif_user   ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notif_unread ON notifications(user_id, is_read);
 
 -- ============================================================
+-- SETTINGS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS settings (
+  key         VARCHAR(100) PRIMARY KEY,
+  value       TEXT NOT NULL,
+  updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO settings (key, value)
+VALUES
+  ('email_user', ''),
+  ('email_pass', ''),
+  ('low_stock_email_time', '09:00'),
+  ('low_stock_email_timezone', 'Asia/Kolkata')
+ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
 -- Auto-update updated_at trigger for items
 -- ============================================================
 CREATE OR REPLACE FUNCTION update_updated_at()
